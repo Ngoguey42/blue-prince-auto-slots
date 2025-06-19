@@ -2,15 +2,12 @@ import time
 import numpy as np
 import pyautogui
 import mss
-import imageio.v3 as iio
+import os
+import numpy as np
 
-a = iio.imread(r'\\wsl$\Ubuntu-18.04\home\nico\test\405\baseline.png')
-assert a.shape == (2160, 3840, 3)
-assert a.dtype.name == 'uint8'
-a = (a.astype('float32') / 255.).mean(axis=-1)
-assert a.shape == (2160, 3840)
+import main_model
 
-print(a.shape, a.dtype)
+
 
 def CLICK():
     time.sleep(0.01)
@@ -27,6 +24,27 @@ CLICK_B1 = lambda: (pyautogui.moveTo(1768, 1487, duration=0.5), CLICK(), CLICK()
 CLICK_B2 = lambda: (pyautogui.moveTo(2090, 1487, duration=0.5), CLICK(), CLICK())
 CLICK_B3 = lambda: (pyautogui.moveTo(2386, 1487, duration=0.5), CLICK(), CLICK())
 
+
+
+
+
+
+
+# test_input = np.random.rand(144, 1, 3).astype(np.float32)
+# predicted_label = infer(test_input)
+
+
+# l = []
+
+#     l.append(a)
+
+# a = np.hstack(l)
+# print(a.shape, a.min(), a.max())
+# a = (a * 255).astype('uint8')
+# iio.imwrite(os.path.join(PREFIX, 'res.png'), a)
+
+# cptxsncd
+# cptx..cd
 
 
 
