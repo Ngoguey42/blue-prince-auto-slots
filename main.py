@@ -8,6 +8,8 @@ import collections
 
 from main_model import peek, infer
 
+PREFIX = os.path.dirname(__file__)
+
 def CLICK():
     time.sleep(0.01)
     pyautogui.mouseDown()
@@ -68,104 +70,159 @@ def board_value(board):
     tot = tot * 2 ** c['x']
     return tot
 
+path = os.path.join(PREFIX, 'events.txt')
+events = open(path).read().strip().split('\n')
+if events == ['']:
+    events = []
 
-just_had_movement = True
-prev_img = None
-while True:
-    # time.sleep(1) # TODO: Remove
-    t0 = time.monotonic()
-    # print('Polling')
+stats = collections.Counter()
+for ev in events:
+    if ev.startswith('p:'): continue
+    assert ev.startswith('b:')
+    ev = ev[2:]
+    assert len(ev) == 4
+    for letter in ev:
+        if letter == '.': continue
+        assert letter in NAMES
+        stats[letter] += 1
 
-    with mss.mss() as sct:
-        monitor = sct.monitors[2]
-        img = sct.grab(monitor)
-        img = np.asarray(img)[:, :, [2, 1, 0]]
-        # print('  Snapshoted!', img.shape)
-        assert img.shape == (2160, 3840, 3)
-        assert img.dtype.name == 'uint8'
-        img = (img.astype('float32') / 255.)
-        assert img.shape == (2160, 3840, 3)
-        assert 0 <= img.min() < img.max() <= 1.0
 
-    if prev_img is None:
-        print('Case 1 - First loop')
+def get_probas():
+    probas = {
+        # Consider that probability of sampling a certain letter is 0%, until we've seen that letter 30 times
+        letter: stats[letter] if stats[letter] > 30 else 0
+        for letter in NAMES.keys()
+    }
+    tot = sum(probas.values())
+    probas = {
+        k: v / tot
+        for k, v in probas.items()
+    }
+    return probas
+
+print('stats', stats, get_probas())
+
+
+path = os.path.join(PREFIX, 'events.txt')
+with open(path, 'a') as event_stream:
+    event_stream.write('p:start\n')
+    just_had_movement = True
+    prev_img = None
+    last_action = None
+    while True:
+        # time.sleep(1) # TODO: Remove
+        t0 = time.monotonic()
+        # print('Polling')
+
+        with mss.mss() as sct:
+            monitor = sct.monitors[2]
+            img = sct.grab(monitor)
+            img = np.asarray(img)[:, :, [2, 1, 0]]
+            # print('  Snapshoted!', img.shape)
+            assert img.shape == (2160, 3840, 3)
+            assert img.dtype.name == 'uint8'
+            img = (img.astype('float32') / 255.)
+            assert img.shape == (2160, 3840, 3)
+            assert 0 <= img.min() < img.max() <= 1.0
+
+        if prev_img is None:
+            print('Case 1 - First loop')
+            prev_img = img
+            continue
+
+        diff = (prev_img - img) > 0.10
+        assert diff.shape == (2160, 3840, 3)
+        diff = diff.any(axis=-1)
+        assert diff.shape == (2160, 3840)
+        count = diff.flatten().sum() # number of pixels that changed significantly since last refresh
+        if count > 200:
+            print('Case 2 - There\'s movement')
+            prev_img = img
+            just_had_movement = True
+            continue
+        if not just_had_movement:
+            print('Case 3 - Screen didn\'t move since last check')
+            prev_img = img
+            continue
+
+        print('Case 4 - No movements after movements')
+        just_had_movement = False
         prev_img = img
-        continue
 
-    diff = (prev_img - img) > 0.10
-    assert diff.shape == (2160, 3840, 3)
-    diff = diff.any(axis=-1)
-    assert diff.shape == (2160, 3840)
-    count = diff.flatten().sum() # number of pixels that changed significantly since last refresh
-    if count > 200:
-        print('Case 2 - There\'s movement')
-        prev_img = img
-        just_had_movement = True
-        continue
-    if not just_had_movement:
-        print('Case 3 - Screen didn\'t move since last check')
-        prev_img = img
-        continue
+        board = ''
+        for i in range(4):
+            a = peek(img, i)
+            letter = infer(a)
+            board += letter
+            print(f'  {i} -> {NAMES[letter]}')
 
-    print('Case 4 - No movements after movements')
-    just_had_movement = False
-    prev_img = img
+        if last_action is None:
+            # Don't save if we don't know what was just done
+            continue
+        elif last_action == 'reroll':
+            for letter in board:
+                stats[letter] += 1
+            event_stream.write(f'b:{board}\n')
+        elif isinstance(last_action, int):
+            assert last_action in [0, 1, 2, 3]
+            new_letter = board[last_action]
+            stats[new_letter] += 1
+            tok = '....'
+            tok[last_action] = new_letter
+            event_stream.write(f'b:{tok}\n')
+        else:
+            assert False
 
-    board = ''
-    for i in range(4):
-        a = peek(img, i)
-        letter = infer(a)
-        board += letter
-        print(f'  {i} -> {NAMES[letter]}')
-    val = board_value(board)
-    print(f'  value: {val}')
-    # t1 = time.monotonic()
-    # print('process took', t1 - t0)
 
-    # test_input = np.random.rand(144, 1, 3).astype(np.float32)
-    # predicted_label = infer(test_input)
+        val = board_value(board)
+        print(f'  value: {val}')
+        # t1 = time.monotonic()
+        # print('process took', t1 - t0)
 
-    # l = []
+        # test_input = np.random.rand(144, 1, 3).astype(np.float32)
+        # predicted_label = infer(test_input)
 
-    #     l.append(a)
+        # l = []
 
-    # a = np.hstack(l)
-    # print(a.shape, a.min(), a.max())
-    # a = (a * 255).astype('uint8')
-    # iio.imwrite(os.path.join(PREFIX, 'res.png'), a)
+        #     l.append(a)
 
-    # cptxsncd
-    # cptx..cd
+        # a = np.hstack(l)
+        # print(a.shape, a.min(), a.max())
+        # a = (a * 255).astype('uint8')
+        # iio.imwrite(os.path.join(PREFIX, 'res.png'), a)
 
+        # cptxsncd
+        # cptx..cd
 
 
 
 
-    # CLICK_LEVER()
-    # time.sleep(3)
-    # CLICK_B0()
-    # time.sleep(3)
-    # CLICK_B1()
-    # time.sleep(3)
-    # CLICK_B2()
-    # time.sleep(3)
-    # CLICK_B3()
 
-    # for _ in range(10):
         # CLICK_LEVER()
-        # time.sleep(1)
-        # CLICK()
+        # time.sleep(3)
+        # CLICK_B0()
+        # time.sleep(3)
+        # CLICK_B1()
+        # time.sleep(3)
+        # CLICK_B2()
+        # time.sleep(3)
+        # CLICK_B3()
+
+        # for _ in range(10):
+            # CLICK_LEVER()
+            # time.sleep(1)
+            # CLICK()
+            # pyautogui.click()
+            # print('clicked')
+
+
+        # CLICK_LEVER()
+
         # pyautogui.click()
-        # print('clicked')
-
-
-    # CLICK_LEVER()
-
-    # pyautogui.click()
 
 
 
 
 
 
-    #
+        #
