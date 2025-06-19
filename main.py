@@ -26,6 +26,39 @@ CLICK_B2 = lambda: (pyautogui.moveTo(2090, 1487, duration=0.5), CLICK(), CLICK()
 CLICK_B3 = lambda: (pyautogui.moveTo(2386, 1487, duration=0.5), CLICK(), CLICK())
 BORDER = 200
 
+SPIN_Y = 1490
+SPIN_XS = [2645, 2705, 2765, 2828, 2887]
+
+def peek_spins(img):
+    assert img.shape == (2160, 3840, 3)
+    assert img.dtype.name == 'float32'
+
+    res = []
+    for x in SPIN_XS:
+        v = img[SPIN_Y, x]
+        assert v.shape == (3,)
+        v = v.mean()
+        assert 0 <= v <= 1
+        # OFF: 51, 65, 64
+        # ON-: 158, 255, 223
+        res.append(bool(v > 0.5))
+    match res:
+        case [False, False, False, False, False]:
+            return 0
+        case [False, False, False, False, True]:
+            return 1
+        case [False, False, False, True, True]:
+            return 2
+        case [False, False, True, True, True]:
+            return 3
+        case [False, True, True, True, True]:
+            return 4
+        case [True, True, True, True, True]:
+            return 5
+        case _:
+            assert False, res
+
+
 NAMES = dict(
     c= 'coin',
     p= 'pile',
@@ -156,6 +189,8 @@ with open(path, 'a') as event_stream:
             board += letter
             print(f'  {i} -> {NAMES[letter]}')
 
+        last_action = 'reroll' # TODO: REMOVE ME!!!
+
         if last_action is None:
             # Don't save if we don't know what was just done
             continue
@@ -176,6 +211,9 @@ with open(path, 'a') as event_stream:
 
         val = board_value(board)
         print(f'  value: {val}')
+        spin_used = peek_spins(img)
+        spin_left = 5 - spin_used
+        print(f' {spin_left=:}')
         # t1 = time.monotonic()
         # print('process took', t1 - t0)
 
