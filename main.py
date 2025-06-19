@@ -95,7 +95,8 @@ def board_value(board):
     # t - tref
     tot += c['t'] * 10
     # s - snak / n - net
-    tot += c['s'] * c['n'] * 3
+    # tot += c['s'] * c['n'] * 3 # This is wrong, observed ig
+    tot += c['s'] * min(1, c['n']) * 3
     # w - crown
     if c['w'] == 4:
         tot += 100
@@ -252,7 +253,7 @@ with open(path, 'a') as event_stream:
         spin_used = peek_spins(img)
         spin_left = 5 - spin_used
         print(f' {spin_left=:}')
-        next_best_action, down_value = get_best_action(bytearray(board.encode()), min(spin_left, 3), get_probas())
+        next_best_action, down_value = get_best_action(bytearray(board.encode()), min(spin_left, 4), get_probas())
         # next_best_action, down_value = get_best_action(bytearray(board.encode()), 3, get_probas())
         print(f'  {next_best_action=:} {down_value=:}')
 
