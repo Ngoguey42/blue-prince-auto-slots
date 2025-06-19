@@ -18,7 +18,7 @@ y in 1019:1163
 """
 
 
-LETTERS = "cptxsncd" # coin, pile, trefle, 2x, snake, net, crown, dash
+LETTERS = "cptxsnwd" # coin, pile, trefle, 2x, snake, net, croWn, dash
 Y0, Y1 = 1019, 1163
 XS = [1464, 1763, 2068, 2357]
 DELTA = 20
@@ -29,13 +29,14 @@ def peek(img, i):
     assert i in [0, 1, 2, 3]
     x = XS[i]
     a = img[Y0:Y1, x-DELTA:x+1+DELTA]
-    assert 0 <= a.min() < a.max() <= 1.
+    # print('WTF', a.shape, a.dtype, a.min(), a.max())
+    assert 0 <= a.min() <= a.max() <= 1.0
     a = np.median(a, axis=1)
     a = a[:, None, :]
     assert a.shape == (Y1 - Y0, 1, 3)
     return a
 
-filenames = ['ptcd.png', 'xcpc.png', 'pcsn.png']
+filenames = ['ptcd.png', 'xwpw.png', 'pcsn.png']
 needles = {}
 for filename in filenames:
     path = os.path.join(PREFIX, filename)
@@ -46,7 +47,7 @@ for filename in filenames:
     assert img.dtype.name == 'uint8'
     img = (img.astype('float32') / 255.)
     assert img.shape == (2160, 3840, 3)
-    assert 0 <= img.min() < img.max() <= 255
+    assert 0 <= img.min() < img.max() <= 1.0
     print(img.shape, img.dtype)
 
     for i, letter in enumerate(filename[:4]):
