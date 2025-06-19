@@ -127,6 +127,12 @@ def get_probas():
         for letter in NAMES.keys()
     }
     tot = sum(probas.values())
+    if len([v for v in probas.values() if v != 0]) <= 2:
+        # If we're too early in the probability estimation process, just use 50-50 for dash and coin.
+        probas['d'] = 5000 # dash
+        probas['c'] = 5000 # coin
+        tot = sum(probas.values())
+
     probas = {
         k: v / tot
         for k, v in probas.items()
@@ -135,6 +141,36 @@ def get_probas():
 
 print('stats', stats, get_probas())
 
+def get_best_action(board0, spin_left, probas, depth=0):
+    assert isinstance(board0, bytearray)
+    assert spin_left >= 0
+    if spin_left == 0:
+        return ('reroll', board_value(board0.decode()))
+    # print('HEY', probas)
+
+    actions = {}
+    actions['reroll'] = board_value(board0.decode())
+    # print('HEY:', depth, board0.decode(), actions)
+    for i in range(4): # for each slot to reroll
+        # if depth <= 2:
+            # print(f'| depth={depth}' + ' ' * depth, "testing roll at", i)
+        sum_weighted_value = -1 # Start at -1 because spinning costs 1
+        board = board0.copy()
+        for dst_letter, proba in probas.items(): # explore every outcome
+            board[i] = ord(dst_letter)
+            _next_best_action, down_value = get_best_action(board, spin_left - 1, probas, depth=depth+1)
+            sum_weighted_value += proba * down_value
+        # if depth <= 2:
+            # print(f'| depth={depth}' + ' ' * depth, "testing roll at", i, f"found {sum_weighted_value=:}")
+        actions[i] = sum_weighted_value # remember score of action
+    best_action = max(actions, key=lambda k: actions[k])
+    # if depth <= 2:
+        # print(f'| depth={depth}' + ' ' * depth, (best_action, actions[best_action]), actions)
+    if depth == 0:
+        print('  ', actions)
+    return (best_action, actions[best_action])
+
+action_count = 0
 
 path = os.path.join(PREFIX, 'events.txt')
 with open(path, 'a') as event_stream:
@@ -189,11 +225,10 @@ with open(path, 'a') as event_stream:
             board += letter
             print(f'  {i} -> {NAMES[letter]}')
 
-        last_action = 'reroll' # TODO: REMOVE ME!!!
 
         if last_action is None:
             # Don't save if we don't know what was just done
-            continue
+            pass
         elif last_action == 'reroll':
             for letter in board:
                 stats[letter] += 1
@@ -202,11 +237,14 @@ with open(path, 'a') as event_stream:
             assert last_action in [0, 1, 2, 3]
             new_letter = board[last_action]
             stats[new_letter] += 1
-            tok = '....'
-            tok[last_action] = new_letter
+            tok = bytearray(b'....')
+            tok[last_action] = ord(new_letter)
+            tok = tok.decode()
             event_stream.write(f'b:{tok}\n')
         else:
             assert False
+        if action_count % 10 == 1:
+            print('stats', stats, get_probas())
 
 
         val = board_value(board)
@@ -214,6 +252,26 @@ with open(path, 'a') as event_stream:
         spin_used = peek_spins(img)
         spin_left = 5 - spin_used
         print(f' {spin_left=:}')
+        next_best_action, down_value = get_best_action(bytearray(board.encode()), min(spin_left, 3), get_probas())
+        # next_best_action, down_value = get_best_action(bytearray(board.encode()), 3, get_probas())
+        print(f'  {next_best_action=:} {down_value=:}')
+
+        if next_best_action == 'reroll':
+            CLICK_LEVER()
+        elif next_best_action == 0:
+            CLICK_B0()
+        elif next_best_action == 1:
+            CLICK_B1()
+        elif next_best_action == 2:
+            CLICK_B2()
+        elif next_best_action == 3:
+            CLICK_B3()
+        else:
+            assert False
+        last_action = next_best_action
+        action_count += 1
+
+
         # t1 = time.monotonic()
         # print('process took', t1 - t0)
 
