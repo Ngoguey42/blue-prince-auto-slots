@@ -123,8 +123,8 @@ for ev in events:
 
 def get_probas():
     probas = {
-        # Consider that probability of sampling a certain letter is 0%, until we've seen that letter 30 times
-        letter: stats[letter] if stats[letter] > 30 else 0
+        # Consider that probability of sampling a certain letter is 0%, until we've seen that letter 27 times
+        letter: stats[letter] if stats[letter] > 27 else 0
         for letter in NAMES.keys()
     }
     tot = sum(probas.values())
@@ -142,12 +142,30 @@ def get_probas():
 
 print('stats', stats, get_probas())
 
+
+memo_age = 0
+memo = {}
 def get_best_action(board0, spin_left, probas, depth=0):
     assert isinstance(board0, bytearray)
     assert spin_left >= 0
     if spin_left == 0:
         return ('reroll', board_value(board0.decode()))
     # print('HEY', probas)
+
+    global memo_age
+    global memo
+    if depth == 0:
+        memo_age += 1
+        print(f'  {memo_age=:} {len(memo)=:}')
+        if memo_age >= 40: # Reset memoisation every 40 actions, to refresh probabilities
+            memo_age = 0
+            memo = {}
+    key = (bytes(board0), spin_left)
+    if key in memo:
+        a, b, c = memo[key]
+        if depth == 0:
+            print('  ', c)
+        return (a, b)
 
     actions = {}
     actions['reroll'] = board_value(board0.decode())
@@ -169,6 +187,7 @@ def get_best_action(board0, spin_left, probas, depth=0):
         # print(f'| depth={depth}' + ' ' * depth, (best_action, actions[best_action]), actions)
     if depth == 0:
         print('  ', actions)
+    memo[key] = (best_action, actions[best_action], actions)
     return (best_action, actions[best_action])
 
 action_count = 0
@@ -253,7 +272,8 @@ with open(path, 'a') as event_stream:
         spin_used = peek_spins(img)
         spin_left = 5 - spin_used
         print(f' {spin_left=:}')
-        next_best_action, down_value = get_best_action(bytearray(board.encode()), min(spin_left, 4), get_probas())
+        next_best_action, down_value = get_best_action(bytearray(board.encode()), spin_left, get_probas())
+        # next_best_action, down_value = get_best_action(bytearray(board.encode()), min(spin_left, 4), get_probas())
         # next_best_action, down_value = get_best_action(bytearray(board.encode()), 3, get_probas())
         print(f'  {next_best_action=:} {down_value=:}')
 
