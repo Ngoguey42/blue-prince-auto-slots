@@ -7,35 +7,16 @@ import numpy as np
 import collections
 
 from main_model import peek, infer
+from config import *
 
-PREFIX = os.path.dirname(__file__)
-
-def CLICK():
-    time.sleep(0.01)
-    pyautogui.mouseDown()
-    time.sleep(0.01)
-    pyautogui.click()
-    time.sleep(0.1)
-    pyautogui.mouseUp()
-    time.sleep(0.01)
-
-CLICK_LEVER = lambda: (pyautogui.moveTo(3280, 930, duration=0.5), CLICK(), CLICK())
-CLICK_B0 = lambda: (pyautogui.moveTo(1468, 1487, duration=0.5), CLICK(), CLICK())
-CLICK_B1 = lambda: (pyautogui.moveTo(1768, 1487, duration=0.5), CLICK(), CLICK())
-CLICK_B2 = lambda: (pyautogui.moveTo(2090, 1487, duration=0.5), CLICK(), CLICK())
-CLICK_B3 = lambda: (pyautogui.moveTo(2386, 1487, duration=0.5), CLICK(), CLICK())
-BORDER = 200
-
-SPIN_Y = 1490
-SPIN_XS = [2645, 2705, 2765, 2828, 2887]
 
 def peek_spins(img):
-    assert img.shape == (2160, 3840, 3)
+    assert img.shape == (SCREEN_H, SCREEN_W, 3)
     assert img.dtype.name == 'float32'
 
     res = []
-    for x in SPIN_XS:
-        v = img[SPIN_Y, x]
+    for x in MACHINE.SPIN_XS:
+        v = img[MACHINE.SPIN_Y, x]
         assert v.shape == (3,)
         v = v.mean()
         assert 0 <= v <= 1
@@ -55,20 +36,18 @@ def peek_spins(img):
             return 4
         case [True, True, True, True, True]:
             return 5
+
+        case [False, False, False]:
+            return 0
+        case [False, False, True]:
+            return 1
+        case [False, True, True]:
+            return 2
+        case [True, True, True]:
+            return 3
+
         case _:
             assert False, res
-
-
-NAMES = dict(
-    c= 'coin',
-    p= 'pile',
-    t= 'tref',
-    x= '2x--',
-    s= 'snak',
-    n= 'net-',
-    w= 'crown',
-    d= 'dash',
-)
 
 
 def board_value(board):
@@ -158,10 +137,10 @@ def choose_action(actions, root=False):
     ]
     delta = actions[0][1] - reroll_val
     assert delta >= 0
-    if delta < 0.01:
-        if root:
-            print('  \033[31mchoosing reroll over slightly better option\033[0m', f'{delta}')
-        return ('reroll', reroll_val) # Favor reroll when it's close. It's suboptimal on the long run but it also kills some of the noise
+    # if delta < 0.2: # Moved from 0.01 to 0.2
+    #     if root:
+    #         print('  \033[31mchoosing reroll over slightly better option\033[0m', f'{delta}')
+    #     return ('reroll', reroll_val) # Favor reroll when it's close. It's suboptimal on the long run but it also kills some of the noise
     return actions[0]
 
 
@@ -192,7 +171,8 @@ def get_best_action(board0, spin_left, probas, depth=0):
     actions = {}
     actions['reroll'] = board_value(board0.decode())
     for i in range(4): # for each slot to reroll
-        sum_weighted_value = -1 # Start at -1 because spinning costs 1
+        # sum_weighted_value = -1 # Start at -1 because spinning costs 1
+        sum_weighted_value = -1.1 # Penalize spinning. Penilize risk.
         board = board0.copy()
         for dst_letter, proba in probas.items(): # explore every outcome
             board[i] = ord(dst_letter)
@@ -224,14 +204,14 @@ with open(path, 'a') as event_stream:
         # print('Polling')
 
         with mss.mss() as sct:
-            monitor = sct.monitors[2]
+            monitor = sct.monitors[MSS_SCREEN_ID]
             img = sct.grab(monitor)
             img = np.asarray(img)[:, :, [2, 1, 0]]
             # print('  Snapshoted!', img.shape)
-            assert img.shape == (2160, 3840, 3)
+            assert img.shape == (SCREEN_H, SCREEN_W, 3)
             assert img.dtype.name == 'uint8'
             img = (img.astype('float32') / 255.)
-            assert img.shape == (2160, 3840, 3)
+            assert img.shape == (SCREEN_H, SCREEN_W, 3)
             assert 0 <= img.min() < img.max() <= 1.0
 
         if prev_img is None:
@@ -240,9 +220,9 @@ with open(path, 'a') as event_stream:
             continue
 
         diff = (prev_img - img) > 0.10
-        assert diff.shape == (2160, 3840, 3)
+        assert diff.shape == (SCREEN_H, SCREEN_W, 3)
         diff = diff.any(axis=-1)
-        assert diff.shape == (2160, 3840)
+        assert diff.shape == (SCREEN_H, SCREEN_W)
         count = diff.flatten().sum() # number of pixels that changed significantly since last refresh
         if count > 200:
             print('Case 2 - There\'s movement')
@@ -260,7 +240,7 @@ with open(path, 'a') as event_stream:
 
         board = ''
         for i in range(4):
-            a = peek(img, i)
+            a = peek(img, i, plot=False)
             letter = infer(a)
             board += letter
             print(f'  {i} -> {NAMES[letter]}')
@@ -289,7 +269,7 @@ with open(path, 'a') as event_stream:
         val = board_value(board)
         print(f'  value: {val}')
         spin_used = peek_spins(img)
-        spin_left = 5 - spin_used
+        spin_left = MACHINE.SPIN_COUNT - spin_used
         print(f' {spin_left=:}')
         next_best_actions = get_best_action(bytearray(board.encode()), spin_left, get_probas())
         next_best_action, down_value = choose_action(next_best_actions, root=True)
@@ -299,15 +279,15 @@ with open(path, 'a') as event_stream:
 
         if next_best_action == 'reroll':
             print(f'  \033[32m REROLL \033[0m')
-            CLICK_LEVER()
+            MACHINE.CLICK_LEVER()
         elif next_best_action == 0:
-            CLICK_B0()
+            MACHINE.CLICK_B0()
         elif next_best_action == 1:
-            CLICK_B1()
+            MACHINE.CLICK_B1()
         elif next_best_action == 2:
-            CLICK_B2()
+            MACHINE.CLICK_B2()
         elif next_best_action == 3:
-            CLICK_B3()
+            MACHINE.CLICK_B3()
         else:
             assert False
         last_action = next_best_action

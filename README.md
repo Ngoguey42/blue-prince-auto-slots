@@ -1,10 +1,12 @@
-Monte Carlo Tree Search (MCTS) bot to play Blue Prince's one-arm bandit optimally. 
+Monte Carlo Tree Search (MCTS) bot to play Blue Prince's one-arm bandit optimally.
 
 Maximizes gold per cash-out, not gold per hour
 
 Given the simplicity of the game, the MCTS explores at full depth
 
 Automatically determines/refines symbols probabilities while playing
+
+Supports playing on the 3 spin and 5 spin machine (the big yellow one that needs to be repaired)
 
 ![My Image](./vanity.png)
 
@@ -18,7 +20,6 @@ Assumptions about the game's mechanics:
 - Each symbol draw is independant and follows a uniform sampling
 
 You'll need to understand and patch the the code to use it for yourself. Assumption about the state of the game:
-- Playing on the 5 spin machine (the big yellow one that needs to be repaired)
 - Blue Prince running on Windows's "main" screen
 - 4k screen
 - `with mss.mss() as sct: monitor = sct.monitors[2]` gives that monitor
@@ -26,7 +27,7 @@ You'll need to understand and patch the the code to use it for yourself. Assumpt
 - Game version: aroudn the 20th june 2025
 
 
-### Stats
+### Stats (5 spins machine)
 
 Symbols probabilities (inferred):
 - coin 29.9%
