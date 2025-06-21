@@ -143,13 +143,35 @@ def get_probas():
 print('stats', stats, get_probas())
 
 
+def choose_action(actions, root=False):
+    if len(actions) == 1:
+        assert actions[0][0] == 'reroll'
+        return actions[0]
+    assert len(actions) == 5, actions
+    if actions[0][0] == 'reroll':
+        return actions[0] # Skipping the print
+
+    reroll_val, = [
+        v
+        for k, v in actions
+        if k == 'reroll'
+    ]
+    delta = actions[0][1] - reroll_val
+    assert delta >= 0
+    if delta < 0.01:
+        if root:
+            print('  \033[31mchoosing reroll over slightly better option\033[0m', f'{delta}')
+        return ('reroll', reroll_val) # Favor reroll when it's close. It's suboptimal on the long run but it also kills some of the noise
+    return actions[0]
+
+
 memo_age = 0
 memo = {}
 def get_best_action(board0, spin_left, probas, depth=0):
     assert isinstance(board0, bytearray)
     assert spin_left >= 0
     if spin_left == 0:
-        return ('reroll', board_value(board0.decode()))
+        return [('reroll', board_value(board0.decode()))]
     # print('HEY', probas)
 
     global memo_age
@@ -162,33 +184,31 @@ def get_best_action(board0, spin_left, probas, depth=0):
             memo = {}
     key = (bytes(board0), spin_left)
     if key in memo:
-        a, b, c = memo[key]
+        actions = memo[key]
         if depth == 0:
-            print('  ', c)
-        return (a, b)
+            print(' ', actions)
+        return actions
 
     actions = {}
     actions['reroll'] = board_value(board0.decode())
-    # print('HEY:', depth, board0.decode(), actions)
     for i in range(4): # for each slot to reroll
-        # if depth <= 2:
-            # print(f'| depth={depth}' + ' ' * depth, "testing roll at", i)
         sum_weighted_value = -1 # Start at -1 because spinning costs 1
         board = board0.copy()
         for dst_letter, proba in probas.items(): # explore every outcome
             board[i] = ord(dst_letter)
-            _next_best_action, down_value = get_best_action(board, spin_left - 1, probas, depth=depth+1)
+            next_best_actions = get_best_action(board, spin_left - 1, probas, depth=depth+1)
+            next_best_action_, down_value = choose_action(next_best_actions)
             sum_weighted_value += proba * down_value
-        # if depth <= 2:
-            # print(f'| depth={depth}' + ' ' * depth, "testing roll at", i, f"found {sum_weighted_value=:}")
         actions[i] = sum_weighted_value # remember score of action
-    best_action = max(actions, key=lambda k: actions[k])
-    # if depth <= 2:
-        # print(f'| depth={depth}' + ' ' * depth, (best_action, actions[best_action]), actions)
+    actions = [
+        (k, actions[k])
+        for k in sorted(actions, key=lambda k: -actions[k])
+    ]
+    assert actions[0][1] >= actions[0][-1]
     if depth == 0:
-        print('  ', actions)
-    memo[key] = (best_action, actions[best_action], actions)
-    return (best_action, actions[best_action])
+        print(' ', actions)
+    memo[key] = actions
+    return actions
 
 action_count = 0
 
@@ -266,18 +286,19 @@ with open(path, 'a') as event_stream:
         if action_count % 10 == 1:
             print('stats', stats, get_probas())
 
-
         val = board_value(board)
         print(f'  value: {val}')
         spin_used = peek_spins(img)
         spin_left = 5 - spin_used
         print(f' {spin_left=:}')
-        next_best_action, down_value = get_best_action(bytearray(board.encode()), spin_left, get_probas())
+        next_best_actions = get_best_action(bytearray(board.encode()), spin_left, get_probas())
+        next_best_action, down_value = choose_action(next_best_actions, root=True)
         # next_best_action, down_value = get_best_action(bytearray(board.encode()), min(spin_left, 4), get_probas())
         # next_best_action, down_value = get_best_action(bytearray(board.encode()), 3, get_probas())
         print(f'  {next_best_action=:} {down_value=:}')
 
         if next_best_action == 'reroll':
+            print(f'  \033[32m REROLL \033[0m')
             CLICK_LEVER()
         elif next_best_action == 0:
             CLICK_B0()
