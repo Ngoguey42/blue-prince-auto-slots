@@ -1,4 +1,4 @@
-Full decision tree search (dynamic programming) bot to play Blue Prince's one-arm bandit optimally.
+Full decision tree search (dynamic programming) bot to play Blue Prince's bandit optimally.
 
 Maximizes gold per cash-out, not gold per hour
 
