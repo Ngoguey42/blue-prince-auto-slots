@@ -1,8 +1,6 @@
-Monte Carlo Tree Search (MCTS) bot to play Blue Prince's one-arm bandit optimally.
+Full decision tree search (dynamic programming) bot to play Blue Prince's one-arm bandit optimally.
 
 Maximizes gold per cash-out, not gold per hour
-
-Given the simplicity of the game, the MCTS explores at full depth
 
 Automatically determines/refines symbols probabilities while playing
 
